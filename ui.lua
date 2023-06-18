@@ -32,24 +32,26 @@ do
         return function(props)
             setmetatable(props, default_props)
 
-            local function chord_add(idx)
-                print('chord_add', idx)
-            end
+            local function chord_add(idx) end
 
             local function chord_release()
-                print('chord_release')
+                crops.copy_state_from(props.state, held)
+            end
+            
+            local function tap_new(idx)
+                crops.insert_state_at(props.state, props.step, idx)
             end
 
-            local function tap(idx)
-                print('tap', idx)
+            local function tap_existing(idx)
+                print('tap_existing', idx)
             end
 
-            local function double_tap(idx)
-                print('double_tap', idx)
+            local function double_tap_existing(idx)
+                print('double_tap_existing', idx)
             end
 
-            local function hold(idx)
-                print('hold', idx)
+            local function hold_existing(idx)
+                print('hold_existing', idx)
             end
 
             if crops.mode == 'input' then
@@ -69,44 +71,67 @@ do
                             chord_add(idx)
                         end
                     elseif z==0 then
-                        table.remove(held, tab.key(held, idx))
-
-                        if #held == 0 and (not is_releasing) then
+                        if #held == 1 and (not is_releasing) then
                             local theld = util.time() - downtime
                             local tlast = util.time() - lasttime
 
                             clock.cancel(tap_clk)
+
+                            local blank = true
+                            for i,iidx in ipairs(crops.get_state(props.state)) do
+                                if math.abs(iidx) == idx then
+                                    blank = false
+                                    break
+                                end
+                            end
                             
-                            --TODO: only check for tap gesture on blank keys
-                            
-                            if theld > holdtime then --hold
-                                hold(idx)
+                            if blank then
+                                tap_new(idx)
                             else
-                                if tlast < dtaptime then --double-tap
-                                    double_tap(idx)
+                                if theld > holdtime then --hold
+                                    hold_existing(idx)
                                 else
+                                    if tlast < dtaptime then --double-tap
+                                        double_tap_existing(idx)
+                                    else
 
-                                    tap_clk = clock.run(function() 
-                                        clock.sleep(dtaptime)
+                                        tap_clk = clock.run(function() 
+                                            clock.sleep(dtaptime)
 
-                                        tap(idx)
-                                    end)
+                                            tap_existing(idx)
+                                        end)
+                                    end
                                 end
                             end
 
                             lasttime = util.time()
-                        elseif #held > 0 then
+                        elseif #held > 1 then
+                            chord_release()
+
                             held = {}
                             is_releasing = true
-                            
-                            chord_release()
                         end
+                        
+                        table.remove(held, tab.key(held, idx))
                     end
-                    --print('held ------')
-                    --tab.print(held)
-                    --print('-----------')
                 end
             elseif crops.mode == 'redraw' then
+                local g = crops.handler 
+
+                for i,idx in ipairs(crops.get_state(props.state)) do
+                    local lvl
+                    if idx > 0 then
+                        if i == props.step then lvl = props.levels[3]
+                        else lvl = props.levels[2] end
+                    elseif idx < 0 then
+                        if i == props.step then lvl = props.levels[2]
+                        else lvl = props.levels[1] end
+                    end
+
+                    local x, y = Grid.util.index_to_xy(props, math.abs(idx))
+
+                    if lvl>0 then g:led(x, y, lvl) end
+                end
             end
         end
     end
