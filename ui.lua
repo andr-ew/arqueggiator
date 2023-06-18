@@ -7,6 +7,7 @@ do
         size = 128,                      --number of keys in component
         state = {{}},                    --state is a sequece of indices
         step = 1,                        --the current step in the sequence, this key is lit
+        gate = 1,                        --gate value
         levels = { 0, 15 },              --brightness levels. expects a table of 2 ints 0-15
         input = function(n, z) end,      --input callback, passes last key state on any input
         wrap = 16,                       --wrap to the next row/column every n keys
@@ -29,13 +30,18 @@ do
         local held = {}
         local is_releasing = false
 
+        local que = {}
+
         return function(props)
             setmetatable(props, default_props)
 
-            local function chord_add(idx) end
+            local function chord_add(idx) 
+                table.insert(que, idx)
+            end
 
             local function chord_release()
-                crops.copy_state_from(props.state, held)
+                crops.copy_state_from(props.state, que)
+                que = {}
             end
             
             local function tap_new(idx)
@@ -54,6 +60,12 @@ do
                 print('hold_existing', idx)
             end
 
+            local function seq_contains(idx)
+                for i,iidx in ipairs(crops.get_state(props.state)) do
+                    if math.abs(iidx) == idx then return iidx end
+                end
+            end
+
             if crops.mode == 'input' then
                 local x, y, z = table.unpack(crops.args) 
                 local idx = Grid.util.xy_to_index(props, x, y)
@@ -63,7 +75,6 @@ do
                         table.insert(held, idx)
 
                         if #held == 1 then
-                            is_releasing = false
                             downtime = util.time()
                         elseif #held == 2 then
                             for _,iidx in ipairs(held) do chord_add(iidx) end
@@ -71,44 +82,38 @@ do
                             chord_add(idx)
                         end
                     elseif z==0 then
-                        if #held == 1 and (not is_releasing) then
-                            local theld = util.time() - downtime
-                            local tlast = util.time() - lasttime
-
-                            clock.cancel(tap_clk)
-
-                            local blank = true
-                            for i,iidx in ipairs(crops.get_state(props.state)) do
-                                if math.abs(iidx) == idx then
-                                    blank = false
-                                    break
-                                end
-                            end
-                            
-                            if blank then
-                                tap_new(idx)
+                        if #held == 1 then
+                            if is_releasing then 
+                                chord_release() 
+                                is_releasing = false
                             else
-                                if theld > holdtime then --hold
-                                    hold_existing(idx)
+                                local theld = util.time() - downtime
+                                local tlast = util.time() - lasttime
+
+                                clock.cancel(tap_clk)
+
+                                if not seq_contains(idx) then
+                                    tap_new(idx)
                                 else
-                                    if tlast < dtaptime then --double-tap
-                                        double_tap_existing(idx)
+                                    if theld > holdtime then --hold
+                                        hold_existing(idx)
                                     else
+                                        if tlast < dtaptime then --double-tap
+                                            double_tap_existing(idx)
+                                        else
 
-                                        tap_clk = clock.run(function() 
-                                            clock.sleep(dtaptime)
+                                            tap_clk = clock.run(function() 
+                                                clock.sleep(dtaptime)
 
-                                            tap_existing(idx)
-                                        end)
+                                                tap_existing(idx)
+                                            end)
+                                        end
                                     end
                                 end
+
+                                lasttime = util.time()
                             end
-
-                            lasttime = util.time()
                         elseif #held > 1 then
-                            chord_release()
-
-                            held = {}
                             is_releasing = true
                         end
                         
@@ -118,19 +123,26 @@ do
             elseif crops.mode == 'redraw' then
                 local g = crops.handler 
 
-                for i,idx in ipairs(crops.get_state(props.state)) do
-                    local lvl
-                    if idx > 0 then
-                        if i == props.step then lvl = props.levels[3]
-                        else lvl = props.levels[2] end
-                    elseif idx < 0 then
-                        if i == props.step then lvl = props.levels[2]
-                        else lvl = props.levels[1] end
+                local idx_step = crops.get_state(props.state)[props.step]
+                local gate = props.gate > 0
+
+                for i = 1, props.size do
+                    local idx = seq_contains(i)
+                        
+                    if idx then
+                        local lvl
+                        if idx > 0 then
+                            if idx == idx_step and gate then lvl = props.levels[3]
+                            else lvl = props.levels[2] end
+                        elseif idx < 0 then
+                            if idx == idx_step and gate then lvl = props.levels[2]
+                            else lvl = props.levels[1] end
+                        end
+
+                        local x, y = Grid.util.index_to_xy(props, math.abs(idx))
+
+                        if lvl>0 then g:led(x, y, lvl) end
                     end
-
-                    local x, y = Grid.util.index_to_xy(props, math.abs(idx))
-
-                    if lvl>0 then g:led(x, y, lvl) end
                 end
             end
         end
