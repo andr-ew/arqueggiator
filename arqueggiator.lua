@@ -23,6 +23,10 @@ function arqueggiator.new()
     return self
 end
 
+--TODO: refactor some internal variables to params for psetfullness
+function arqueggiator:params()
+end
+
 local function advance(self)
     local idx = self.sequence[self.step]
 
