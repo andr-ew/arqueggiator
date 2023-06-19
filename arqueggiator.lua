@@ -34,7 +34,6 @@ local direction_names = { 'reverse', 'forward' }
 
 local cs = require 'controlspec'
 
---TODO: refactor some internal variables to params for psetfullness
 function arqueggiator:params()
     params:add{
         type = 'option', id = self:pfix('division'), name = 'division',
