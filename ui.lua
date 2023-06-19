@@ -119,7 +119,6 @@ do
                                         if tlast < dtaptime then --double-tap
                                             double_tap_existing(idx)
                                         else
-
                                             tap_clk = clock.run(function() 
                                                 clock.sleep(dtaptime)
 
