@@ -28,9 +28,7 @@ end
 
 local divs = { 4/1, 3/1, 2/1, 1/1, 1/2, 1/3, 1/4, 1/5, 1/6, 1/7, 1/8 }
 local div_names = { '4/1', '3/1', '2/1', '1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7', '1/8' }
-
-local directions = { -1, 1 }
-local direction_names = { 'reverse', 'forward' }
+local reverses = { [0] = 1, [1] = -1 }
 
 local cs = require 'controlspec'
 
@@ -44,8 +42,8 @@ function arqueggiator:params()
         controlspec = cs.def{ min = 0, max = 80, default = 50, units = '%' }
     }
     params:add{
-        type = 'option', id = self:pfix('direction'), name = 'direction',
-        options = direction_names, default = tab.key(directions, 1), wrap = true,
+        type = 'binary', behavior = 'toggle', 
+        id = self:pfix('reverse'), name = 'reverse',
     }
 end
 
@@ -74,7 +72,7 @@ end
 function arqueggiator:pulse()
     local div = divs[params:get(self:pfix('division'))]
     local gate_length = params:get(self:pfix('gate length'))/100 * clock.get_beat_sec() * div
-    local stride = directions[params:get(self:pfix('direction'))]
+    local stride = reverses[params:get(self:pfix('reverse'))]
 
     clock.run(advance, self, gate_length, stride)
 end
@@ -87,7 +85,7 @@ function arqueggiator:start()
             local gate_length = params:get(self:pfix('gate length'))/100 
                                 * clock.get_beat_sec() 
                                 * div
-            local stride = directions[params:get(self:pfix('direction'))]
+            local stride = reverses[params:get(self:pfix('reverse'))]
 
             clock.sync(div)
 
