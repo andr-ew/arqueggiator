@@ -37,10 +37,11 @@ do
 
             local function chord_add(idx) 
                 table.insert(que, idx)
+                crops.dirty.grid = true
             end
 
             local function chord_release()
-                crops.copy_state_from(props.state, que)
+                crops.set_state(props.state, que)
                 que = {}
             end
             
@@ -49,15 +50,32 @@ do
             end
 
             local function tap_existing(idx)
-                print('tap_existing', idx)
+                local seq = crops.get_state(props.state)
+                for i,iidx in ipairs(seq) do
+                    if math.abs(iidx) == idx then seq[i] = -seq[i] end
+                end
+
+                crops.set_state(props.state, seq)
             end
 
             local function double_tap_existing(idx)
-                print('double_tap_existing', idx)
+                for i = crops.get_state_length(props.state), 1, -1 do
+                    iidx = crops.get_state_at(props.state, i)
+
+                    if math.abs(iidx) == idx then
+                        crops.insert_state_at(props.state, i, iidx)
+                    end
+                end
             end
 
             local function hold_existing(idx)
-                print('hold_existing', idx)
+                for i = crops.get_state_length(props.state), 1, -1 do
+                    iidx = crops.get_state_at(props.state, i)
+
+                    if math.abs(iidx) == idx then
+                        crops.remove_state_at(props.state, i, iidx)
+                    end
+                end
             end
 
             local function seq_contains(idx)
@@ -123,24 +141,30 @@ do
             elseif crops.mode == 'redraw' then
                 local g = crops.handler 
 
-                local idx_step = crops.get_state(props.state)[props.step]
+                local idx_step = crops.get_state_at(props.state, props.step)
                 local gate = props.gate > 0
 
-                for i = 1, props.size do
-                    local idx = seq_contains(i)
+                for idx = 1, props.size do
+                    local idx_seq = seq_contains(idx)
+                    local is_que = tab.contains(que, idx)
                         
-                    if idx then
-                        local lvl
-                        if idx > 0 then
-                            if idx == idx_step and gate then lvl = props.levels[3]
-                            else lvl = props.levels[2] end
-                        elseif idx < 0 then
-                            if idx == idx_step and gate then lvl = props.levels[2]
-                            else lvl = props.levels[1] end
+                    local lvl = 0
+
+                    if idx_seq then
+                        if idx_seq > 0 then
+                            if idx_seq == idx_step and gate then lvl = props.levels[3]
+                            else lvl = #que==0 and props.levels[2] or 0 end
+                        elseif idx_seq < 0 then
+                            if idx_seq == idx_step and gate then lvl = props.levels[2]
+                            else lvl = #que==0 and props.levels[1] or 0 end
                         end
-
+                    end
+                    if is_que then
+                        lvl = props.levels[2]
+                    end
+                        
+                    if idx_seq or is_que then
                         local x, y = Grid.util.index_to_xy(props, math.abs(idx))
-
                         if lvl>0 then g:led(x, y, lvl) end
                     end
                 end
