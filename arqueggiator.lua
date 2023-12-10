@@ -45,9 +45,14 @@ function arqueggiator:params()
         type = 'binary', behavior = 'toggle', 
         id = self:pfix('reverse'), name = 'reverse',
     }
+    params:add{
+        type = 'binary', behavior = 'toggle', 
+        id = self:pfix('loop'), name = 'loop', default = 1,
+        action = function() self:start() end
+    }
 end
 
-local function advance(self, gate_length, stride)
+local function advance(self, gate_length, stride, loop)
     local idx = self.sequence[self.step]
 
     if idx then 
@@ -60,8 +65,13 @@ local function advance(self, gate_length, stride)
         if idx > 0 then self.action_off(idx) end
         self.gate = 0
         crops.dirty.grid = true
+
+        local next_step = self.step + stride
+        if loop then next_step = util.wrap(next_step, 1, #self.sequence) end
         
-        self.step = util.wrap(self.step + stride, 1, #self.sequence)
+        self.step = next_step 
+        
+        if not self.sequence[self.step] then self:stop() end
     else
         self.step = 1
     end
@@ -73,29 +83,43 @@ function arqueggiator:pulse()
     local div = divs[params:get(self:pfix('division'))]
     local gate_length = params:get(self:pfix('gate length'))/100 * clock.get_beat_sec() * div
     local stride = reverses[params:get(self:pfix('reverse'))]
+    local loop = params:get(self:pfix('loop')) > 0
 
-    clock.run(advance, self, gate_length, stride)
+    clock.run(advance, self, gate_length, stride, loop)
 end
 
 function arqueggiator:start()
-    self.running = true
-    clock.run(function()
-        while self.running do 
-            local div = divs[params:get(self:pfix('division'))]
-            local gate_length = params:get(self:pfix('gate length'))/100 
-                                * clock.get_beat_sec() 
-                                * div
-            local stride = reverses[params:get(self:pfix('reverse'))]
+    if not self.running then
+        self.running = true
+        clock.run(function()
+            while self.running do 
+                local div = divs[params:get(self:pfix('division'))]
+                local gate_length = params:get(self:pfix('gate length'))/100 
+                                    * clock.get_beat_sec() 
+                                    * div
+                local stride = reverses[params:get(self:pfix('reverse'))]
+                local loop = params:get(self:pfix('loop')) > 0
 
-            clock.sync(div)
+                clock.sync(div)
 
-            advance(self, gate_length, stride) 
-        end
-    end)
+                advance(self, gate_length, stride, loop) 
+            end
+        end)
+    end
+end
+
+function arqueggiator:restart()
+    self.step = 1
+    self:start()
 end
 
 function arqueggiator:stop()
     self.running = false
+end
+
+function arqueggiator:set_sequence(new_table)
+    self.sequence = new_table
+    if params:get(self:pfix('loop')) > 0 then self:start() else self:restart() end
 end
 
 return arqueggiator
