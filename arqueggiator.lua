@@ -115,6 +115,7 @@ end
 
 function arqueggiator:stop()
     self.running = false
+    self.step = 1
 end
 
 function arqueggiator:set_sequence(new_table)
