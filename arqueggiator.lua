@@ -102,7 +102,7 @@ function arqueggiator:start()
 
                 clock.sync(div)
 
-                advance(self, gate_length, stride, loop) 
+                advance(self, gate_length, stride, loop)
             end
         end)
     end
