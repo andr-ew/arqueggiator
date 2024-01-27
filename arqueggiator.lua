@@ -32,6 +32,8 @@ local reverses = { [0] = 1, [1] = -1 }
 
 local cs = require 'controlspec'
 
+arqueggiator.params_count = 4
+
 function arqueggiator:params()
     params:add{
         type = 'option', id = self:pfix('division'), name = 'division',
