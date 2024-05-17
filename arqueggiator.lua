@@ -9,8 +9,6 @@ local div_names = {
     'stop', '4/1', '2/1', '1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7', '1/8', '1/16', '1/32'
 }
 
-
-
 local reverses = { [0] = 1, [1] = -1 }
 
 local function advance(self, gate_length, stride, loop)
@@ -20,19 +18,19 @@ local function advance(self, gate_length, stride, loop)
         if idx > 0 then self.action_on(idx) end
         self.gate = 1
         crops.dirty.grid = true
-
-        clock.sleep(gate_length)
-
-        if idx > 0 then self.action_off(idx) end
-        self.gate = 0
-        crops.dirty.grid = true
-
+        
         local next_step = self.step + stride
         if loop then next_step = util.wrap(next_step, 1, #self.sequence) end
         
         self.step = next_step 
         
         if not self.sequence[self.step] then self:stop() end
+
+        clock.sleep(gate_length)
+
+        if idx > 0 then self.action_off(idx) end
+        self.gate = 0
+        crops.dirty.grid = true
     else
         self.step = 1
     end
@@ -58,18 +56,23 @@ function arqueggiator.new(id)
 
     self.running = false
 
+    self.pulse = function()
+        local div = divs[params:get(self:pfix('division'))]
+        local gate_length = params:get(self:pfix('gate length'))/100 
+                            * clock.get_beat_sec() 
+                            * div
+        local stride = reverses[params:get(self:pfix('reverse'))]
+        local loop = params:get(self:pfix('loop')) > 0
+
+        advance(self, gate_length, stride, loop)
+    end
+
     self.tick = function()
         while self.running do 
             local div = divs[params:get(self:pfix('division'))]
-            local gate_length = params:get(self:pfix('gate length'))/100 
-                                * clock.get_beat_sec() 
-                                * div
-            local stride = reverses[params:get(self:pfix('reverse'))]
-            local loop = params:get(self:pfix('loop')) > 0
-
             clock.sync(div)
 
-            if self.running then advance(self, gate_length, stride, loop) end
+            if self.running then self:pulse() end
         end
     end
 
@@ -82,7 +85,7 @@ end
 
 local cs = require 'controlspec'
 
-arqueggiator.params_count = 4
+arqueggiator.params_count = 5
 
 function arqueggiator:params()
     params:add{
@@ -108,22 +111,19 @@ function arqueggiator:params()
         id = self:pfix('loop'), name = 'loop', default = 1,
         action = function() self:start() end
     }
-    -- params:add{
-    --     -- type = 'bina'
-    -- }
-end
-
-function arqueggiator:pulse()
-    local div = divs[params:get(self:pfix('division'))]
-    local gate_length = params:get(self:pfix('gate length'))/100 * clock.get_beat_sec() * div
-    local stride = reverses[params:get(self:pfix('reverse'))]
-    local loop = params:get(self:pfix('loop')) > 0
-
-    clock.run(advance, self, gate_length, stride, loop)
+    params:add{
+        type = 'binary', behavior = 'trigger',
+        id = self:pfix('pulse'), name = 'pulse',
+        action = function() 
+            clock.run(self.pulse)
+        end
+    }
 end
 
 function arqueggiator:start()
-    if not self.running then
+    local div = params:get(self:pfix('division'))
+
+    if not self.running and div ~= STOPPED then
         self.running = true
         self.clk = clock.run(self.tick)
     end
