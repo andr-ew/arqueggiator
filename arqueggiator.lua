@@ -55,24 +55,29 @@ function arqueggiator.new(id)
     self.action_off = function(idx) end
 
     self.running = false
+    
+    self.division = tab.key(divs, 1/2)
+    self.gate_length = 50
+    self.reverse = 0
+    self.loop = 0
 
-    self.pulse = function()
-        local div = divs[params:get(self:pfix('division'))]
-        local gate_length = params:get(self:pfix('gate length'))/100 
+    self.trigger = function()
+        local div = divs[self.division]
+        local gate_length = self.gate_length/100 
                             * clock.get_beat_sec() 
                             * div
-        local stride = reverses[params:get(self:pfix('reverse'))]
-        local loop = params:get(self:pfix('loop')) > 0
+        local stride = reverses[self.reverse]
+        local loop = self.loop > 0
 
         advance(self, gate_length, stride, loop)
     end
 
     self.tick = function()
         while self.running do 
-            local div = divs[params:get(self:pfix('division'))]
+            local div = divs[self.division]
             clock.sync(div)
 
-            if self.running then self:pulse() end
+            if self.running then self:trigger() end
         end
     end
 
@@ -85,13 +90,24 @@ end
 
 local cs = require 'controlspec'
 
-arqueggiator.params_count = 5
+local param_ids = {
+    'division',
+    'gate_length',
+    'reverse',
+    'loop',
+    'pulse'
+}
+
+arqueggiator.param_ids = param_ids
+arqueggiator.params_count = #param_ids
 
 function arqueggiator:params()
     params:add{
         type = 'option', id = self:pfix('division'), name = 'division',
-        options = div_names, default = tab.key(divs, 1/2),
+        options = div_names, default = self.division,
         action = function(v)
+            self.division = v
+
             self.running = v ~= STOPPED
 
             clock.cancel(self.clk)
@@ -99,29 +115,34 @@ function arqueggiator:params()
         end
     }
     params:add{
-        type = 'control', id = self:pfix('gate length'), name = 'gate length',
-        controlspec = cs.def{ min = 0, max = 80, default = 50, units = '%' }
+        type = 'control', id = self:pfix('gate_length'), name = 'gate length',
+        controlspec = cs.def{ min = 0, max = 80, default = self.gate_length, units = '%' },
+        action = function(v) self.gate_length = v end
     }
     params:add{
         type = 'binary', behavior = 'toggle', 
         id = self:pfix('reverse'), name = 'reverse',
+        action = function(v) self.reverse = v end
     }
     params:add{
         type = 'binary', behavior = 'toggle', 
         id = self:pfix('loop'), name = 'loop', default = 1,
-        action = function() self:start() end
+        action = function(v) 
+            self.loop = v
+            self:start() 
+        end,
     }
     params:add{
         type = 'binary', behavior = 'trigger',
         id = self:pfix('pulse'), name = 'pulse',
         action = function() 
-            clock.run(self.pulse)
+            clock.run(self.trigger)
         end
     }
 end
 
 function arqueggiator:start()
-    local div = params:get(self:pfix('division'))
+    local div = self.division 
 
     if not self.running and div ~= STOPPED then
         self.running = true
@@ -141,7 +162,7 @@ end
 
 function arqueggiator:set_sequence(new_table)
     self.sequence = new_table
-    if params:get(self:pfix('loop')) > 0 then self:start() else self:restart() end
+    if self.loop > 0 then self:start() else self:restart() end
 end
 
 return arqueggiator
