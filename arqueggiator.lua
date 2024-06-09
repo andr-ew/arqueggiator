@@ -11,7 +11,13 @@ local div_names = {
 
 local reverses = { [0] = 1, [1] = -1 }
 
+local init_step = 0
+
 local function advance(self, gate_length, stride, loop)
+    local next_step = self.step + stride
+    if loop then next_step = util.wrap(next_step, 1, #self.sequence) end
+    
+    self.step = next_step 
     local idx = self.sequence[self.step]
 
     if idx then 
@@ -19,20 +25,16 @@ local function advance(self, gate_length, stride, loop)
         self.gate = 1
         crops.dirty.grid = true
         
-        local next_step = self.step + stride
-        if loop then next_step = util.wrap(next_step, 1, #self.sequence) end
-        
-        self.step = next_step 
-        
-        if not self.sequence[self.step] then self:stop() end
-
         clock.sleep(gate_length)
 
         if idx > 0 then self.action_off(idx) end
         self.gate = 0
         crops.dirty.grid = true
+        
+        -- if not self.sequence[self.step] then self:stop() end
     else
-        self.step = 1
+        -- self.step = 1
+        self:stop()
     end
 
     self.index = idx or 1
@@ -45,7 +47,7 @@ function arqueggiator.new(id)
     self.id = id or '1'
 
     self.sequence = {}
-    self.step = 1
+    self.step = init_step
     self.gate = 0
     self.index = 1
     
@@ -151,13 +153,13 @@ function arqueggiator:start()
 end
 
 function arqueggiator:restart()
-    self.step = 1
+    self.step = init_step
     self:start()
 end
 
 function arqueggiator:stop()
     self.running = false
-    self.step = 1
+    self.step = init_step
 end
 
 function arqueggiator:set_sequence(new_table)

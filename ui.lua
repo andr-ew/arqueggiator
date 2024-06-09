@@ -46,7 +46,7 @@ do
             end
             
             local function tap_new(idx)
-                crops.insert_state_at(props.state, props.step, idx)
+                crops.insert_state_at(props.state, props.step + 1, idx)
             end
 
             local function tap_existing(idx)
