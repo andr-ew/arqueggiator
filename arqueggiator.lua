@@ -3,7 +3,7 @@ arqueggiator.__index = arqueggiator
 
 local STOPPED = 1
 local divs = { 
-    4, 4/1, 2/1, 1/1, 1/2, 1/3, 1/4, 1/5, 1/6, 1/7, 1/8, 1/16, 1/32 
+    1/2, 4/1, 2/1, 1/1, 1/2, 1/3, 1/4, 1/5, 1/6, 1/7, 1/8, 1/16, 1/32 
 }
 local div_names = { 
     'stop', '4/1', '2/1', '1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7', '1/8', '1/16', '1/32'
@@ -12,33 +12,6 @@ local div_names = {
 local reverses = { [0] = 1, [1] = -1 }
 
 local init_step = 0
-
-local function advance(self, gate_length, stride, loop)
-    local next_step = self.step + stride
-    if loop then next_step = util.wrap(next_step, 1, #self.sequence) end
-    
-    self.step = next_step 
-    local idx = self.sequence[self.step]
-
-    if idx then 
-        if idx > 0 then self.action_on(idx) end
-        self.gate = 1
-        crops.dirty.grid = true
-        
-        clock.sleep(gate_length)
-
-        if idx > 0 then self.action_off(idx) end
-        self.gate = 0
-        crops.dirty.grid = true
-        
-        -- if not self.sequence[self.step] then self:stop() end
-    else
-        -- self.step = 1
-        self:stop()
-    end
-
-    self.index = idx or 1
-end
 
 function arqueggiator.new(id)
     local self = {}
@@ -71,7 +44,7 @@ function arqueggiator.new(id)
         local stride = reverses[self.reverse]
         local loop = self.loop > 0
 
-        advance(self, gate_length, stride, loop)
+        self:advance(gate_length, stride, loop)
     end
 
     self.tick = function()
@@ -79,11 +52,43 @@ function arqueggiator.new(id)
             local div = divs[self.division]
             clock.sync(div)
 
-            if self.running then self:trigger() end
+            if self.running then self.trigger() end
         end
     end
 
     return self
+end
+
+function arqueggiator:note_on(idx)
+    if idx > 0 then self.action_on(idx) end
+    self.gate = 1
+    crops.dirty.grid = true
+end
+
+function arqueggiator:note_off(idx)
+    if idx > 0 then self.action_off(idx) end
+    self.gate = 0
+    crops.dirty.grid = true
+end
+
+function arqueggiator:advance(gate_length, stride, loop)
+    local next_step = self.step + stride
+    if loop then next_step = util.wrap(next_step, 1, #self.sequence) end
+    
+    self.step = next_step 
+    local idx = self.sequence[self.step]
+
+    if idx then 
+        self:note_on(idx)
+        clock.sleep(gate_length)
+        self:note_off(idx)
+        -- if not self.sequence[self.step] then self:stop() end
+    else
+        -- self.step = 1
+        self:stop()
+    end
+
+    self.index = idx or 1
 end
 
 function arqueggiator:pfix(name)
@@ -113,6 +118,8 @@ function arqueggiator:params()
             self.running = v ~= STOPPED
 
             clock.cancel(self.clk)
+            local idx = self.sequence[self.step]
+            if self.gate > 0 and idx then self:note_off(idx) end
             self.clk = clock.run(self.tick)
         end
     }
