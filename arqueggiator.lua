@@ -1,12 +1,11 @@
 local arqueggiator = {}
 arqueggiator.__index = arqueggiator 
 
-local STOPPED = 1
 local divs = { 
-    1/2, 4/1, 2/1, 1/1, 1/2, 1/3, 1/4, 1/5, 1/6, 1/7, 1/8, 1/16, 1/32 
+    4/1, 3/1, 2/1, 1/1, 1/2, 1/3, 1/4, 1/5, 1/6, 1/7, 1/8, 1/16, 1/32 
 }
 local div_names = { 
-    'stop', '4/1', '2/1', '1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7', '1/8', '1/16', '1/32'
+    '4/1', '3/1', '2/1', '1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7', '1/8', '1/16', '1/32'
 }
 
 local reverses = { [0] = 1, [1] = -1 }
@@ -32,6 +31,7 @@ function arqueggiator.new(id)
     self.running = false
     
     self.division = tab.key(divs, 1/2)
+    self.play = 1
     self.gate_length = 50
     self.reverse = 0
     self.loop = 0
@@ -99,6 +99,7 @@ local cs = require 'controlspec'
 
 local param_ids = {
     'division',
+    'play',
     'gate_length',
     'reverse',
     'loop',
@@ -115,7 +116,19 @@ function arqueggiator:params()
         action = function(v)
             self.division = v
 
-            self.running = v ~= STOPPED
+            clock.cancel(self.clk)
+            local idx = self.sequence[self.step]
+            if self.gate > 0 and idx then self:note_off(idx) end
+            self.clk = clock.run(self.tick)
+        end
+    }
+    params:add{
+        id = self:pfix('play'), name = 'play',
+        type = 'binary', behavior = 'toggle', default = self.play,
+        action = function(v)
+            self.play = v
+
+            self.running = self.play==1
 
             clock.cancel(self.clk)
             local idx = self.sequence[self.step]
