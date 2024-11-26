@@ -34,6 +34,14 @@ do
 
         return function(props)
             setmetatable(props, default_props)
+        
+            local view_width = props.view_width or props.wrap
+            local view_height = props.view_height or props.size // props.wrap
+            local view_x = props.view_x or 1
+            local view_y = props.view_y or 1
+
+            local props_inner = { x = 1, y = 1 }
+            setmetatable(props_inner, { __index = props })
 
             local function chord_add(idx) 
                 table.insert(que, idx)
@@ -85,56 +93,64 @@ do
             end
 
             if crops.mode == 'input' then
-                local x, y, z = table.unpack(crops.args) 
-                local idx = Grid.util.xy_to_index(props, x, y)
+                local x_outer, y_outer, z = table.unpack(crops.args)
 
-                if idx then 
-                    if z==1 then
-                        table.insert(held, idx)
+                if
+                    (x_outer >= props.x and x_outer <= view_width + props.x - 1)
+                    and (y_outer <= props.y and y_outer >= view_height - props.y + 1)
+                then
+                    local x_inner = x_outer - props.x + 1 + view_x
+                    local y_inner = y_outer - props.y + 1 + view_y
+                    local idx = Grid.util.xy_to_index(props_inner, x_inner, y_inner)
 
-                        if #held == 1 then
-                            downtime = util.time()
-                        elseif #held == 2 then
-                            for _,iidx in ipairs(held) do chord_add(iidx) end
-                        elseif #held > 2 then
-                            chord_add(idx)
-                        end
-                    elseif z==0 then
-                        if #held == 1 then
-                            if is_releasing then 
-                                chord_release() 
-                                is_releasing = false
-                            else
-                                local theld = util.time() - downtime
-                                local tlast = util.time() - lasttime
+                    if idx then 
+                        if z==1 then
+                            table.insert(held, idx)
 
-                                clock.cancel(tap_clk)
-
-                                if not seq_contains(idx) then
-                                    tap_new(idx)
+                            if #held == 1 then
+                                downtime = util.time()
+                            elseif #held == 2 then
+                                for _,iidx in ipairs(held) do chord_add(iidx) end
+                            elseif #held > 2 then
+                                chord_add(idx)
+                            end
+                        elseif z==0 then
+                            if #held == 1 then
+                                if is_releasing then 
+                                    chord_release() 
+                                    is_releasing = false
                                 else
-                                    if theld > holdtime then --hold
-                                        hold_existing(idx)
-                                    else
-                                        if tlast < dtaptime then --double-tap
-                                            double_tap_existing(idx)
-                                        else
-                                            tap_clk = clock.run(function() 
-                                                clock.sleep(dtaptime)
+                                    local theld = util.time() - downtime
+                                    local tlast = util.time() - lasttime
 
-                                                tap_existing(idx)
-                                            end)
+                                    clock.cancel(tap_clk)
+
+                                    if not seq_contains(idx) then
+                                        tap_new(idx)
+                                    else
+                                        if theld > holdtime then --hold
+                                            hold_existing(idx)
+                                        else
+                                            if tlast < dtaptime then --double-tap
+                                                double_tap_existing(idx)
+                                            else
+                                                tap_clk = clock.run(function() 
+                                                    clock.sleep(dtaptime)
+
+                                                    tap_existing(idx)
+                                                end)
+                                            end
                                         end
                                     end
-                                end
 
-                                lasttime = util.time()
+                                    lasttime = util.time()
+                                end
+                            elseif #held > 1 then
+                                is_releasing = true
                             end
-                        elseif #held > 1 then
-                            is_releasing = true
+                            
+                            table.remove(held, tab.key(held, idx))
                         end
-                        
-                        table.remove(held, tab.key(held, idx))
                     end
                 end
             elseif crops.mode == 'redraw' then
@@ -163,8 +179,19 @@ do
                     end
                         
                     if idx_seq or is_que then
-                        local x, y = Grid.util.index_to_xy(props, math.abs(idx))
-                        if lvl>0 then g:led(x, y, lvl) end
+                        local x_inner, y_inner = Grid.util.index_to_xy(
+                            props_inner, math.abs(idx)
+                        )
+                        local x_outer = x_inner + props.x - 1 - view_x
+                        local y_outer = y_inner + props.y - 1 - view_y
+
+                        if
+                            (x_outer >= props.x and x_outer <= view_width + props.x - 1)
+                            and (y_outer <= props.y and y_outer >= view_height - props.y + 1)
+                            and lvl > 0
+                        then
+                            g:led(x_outer, y_outer, lvl)
+                        end
                     end
                 end
             end
