@@ -166,7 +166,7 @@ end
 function arqueggiator:start()
     local div = self.division 
 
-    if not self.running and div ~= STOPPED then
+    if not self.running and (self.play == 1) then
         self.running = true
         self.clk = clock.run(self.tick)
     end
